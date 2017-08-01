@@ -9,9 +9,23 @@ mersenne = filter isPrime $ map mapFunction primes where mapFunction = (subtract
 
 mersenneExponents = filter filterFunction primes where filterFunction = isPrime . (subtract 1) . (2^)
 
+--firstWith p []                 = Nothing
+firstWith p (x:xs) | p x       = x
+                   | otherwise = firstWith p xs
+
+pFactor 1 = []
+pFactor x = factor:(pFactor (x `quot` factor))
+ where factor = firstWith (\p -> (x `mod` p) == 0) primes
+
+x = (primes !! 10000) * (primes !! 10001)
+
 main = do putStrLn $ show $ take 10 primes
-          putStrLn $ show $ take 6 mersenneExponents
-          putStrLn $ show $ take 6 mersenne
+          putStrLn $ show $ take 5 mersenneExponents
+          putStrLn $ show $ take 5 mersenne
+          putStrLn $ show $ pFactor 12
+          putStrLn $ show $ pFactor 13
+          putStrLn $ show $ x
+          putStrLn $ show $ pFactor x
 
 
 
