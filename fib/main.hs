@@ -1,14 +1,26 @@
 
+applyN n = foldr (.) id . replicate n
 
+fibFunction (x:y:xs) = (x+y):x:y:xs
 
+fib' :: Int -> [Int]
+fib' 0 = []
+fib' 1 = [1]
+fib' 2 = [1,1]
+fib' n = fibFunction $ fib' $ n - 1
 
-fib' n (x:y:xs) | length xs + 2 >= n = x:y:xs
-                | otherwise          = fib' n ((x+y):x:y:xs)
+fibN n = reverse $ fib' n
 
-fib n = reverse $ fib' n [1,1]
+fibI i = (!!) (fibN $ i + 1) i
 
-main = do putStrLn $ show $ fib 10
-          putStrLn $ show $ zipWith zipFunction (drop 1 $ fib 20) (fib 20) where zipFunction x y = x/y
+fib = map fibI [0..]
+
+main = do putStrLn $ show $ fibN 0
+          putStrLn $ show $ fibN 1
+          putStrLn $ show $ fibN 2
+          putStrLn $ show $ fibN 3
+          putStrLn $ show $ fibN 20
+          putStrLn $ show $ take 20 fib
 
 
 
