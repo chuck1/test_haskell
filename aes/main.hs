@@ -1,18 +1,24 @@
 import Data.Bits
 import Data.List
 import Data.Maybe
+import Data.Word
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as TE
+import qualified Data.ByteString as B
 
 index x xs = fromJust $ elemIndex x xs
 
-rj_xtime :: Int -> Int
+rj_xtime :: Word8 -> Word8
 rj_xtime x | (x .&. 128) > 0 = xor y 27
-           | otherwise       = y where y = (shiftL x 1) .&. 255
+           | otherwise       = y where y = shiftL x 1
 
 gf_alog x = foldl foldingFunction 1 [1..x] where foldingFunction y _ = xor y $ rj_xtime y
 
 gf_log 0 = 0
 gf_log x = index x $ map gf_alog [0..]
 
+
+gf_mulinv :: Word8 -> Word8
 gf_mulinv 0 = 0
 gf_mulinv x = gf_alog(255 - gf_log(x))
 
@@ -21,18 +27,19 @@ test x = a x
              in case y of 0 -> b y
                           _ -> 4
 
+rj_sbox :: Word8 -> Word8
 rj_sbox x = xor sb 99
  where sb = snd $ foldl foldingFunction (gf_mulinv x, gf_mulinv x) [0..3]
        foldingFunction (y, sb') _ = 
-        let y' = ((shiftL y 1) .&. 255) .|. (shiftR y 7)
+        let y' = (shiftL y 1) .|. (shiftR y 7)
         in (y', xor sb' y')
 
-subBytes :: [Int] -> [Int] 
+--subBytes :: [Int] -> [Int] 
 subBytes b = map rj_sbox b
 
 kOffset o k = take 4 (drop ((length k) - o - 4) k)
 
--- NEED TO STORE KEYS BACKWARDS
+-- NEED TO build ekey backwards
 
 expandedKeySize k = (length k) * 4 + 112
 
@@ -56,7 +63,7 @@ rcon x = [0,0,0,rcon' !! x]
 
 addWord [a,b,c,d] xs = a:b:c:d:xs
 
-expand''' :: Int -> Int -> [Int] -> [Int]
+--expand''' :: Int -> Int -> [Int] -> [Int]
 expand''' rnds a ek = foldl foldingFunction ek [1..(rnds-1)]
  where foldingFunction acc i = let ek1 = kOffset ((a+i-1)*4) acc
                                    ek2 = kOffset ((a+i-4)*4) acc
@@ -74,22 +81,38 @@ expand' rnds r ek = expand''' rnds a $ expand'' rnds r ek
 
 quotCeil x y = quot (x + (rem x y)) y
 
-expand :: [Int] -> [Int]
-expand k = foldl foldingFunction k [0..n]
+--expand :: [Int] -> [Int]
+expand k = reverse $ foldl foldingFunction (reverse k) [0..n]
  where foldingFunction acc r = expand' rnds r acc
        n = quotCeil ((expandedKeySize k) - (length k)) (4 * rnds) - 1
        rnds = quot (length k) 4
 
---addRoundKey
+addRoundKey (Crypt ek s) = Crypt (drop 16 ek) (xor' s $ take 16 ek)
 
-hex :: Int -> [Int]
+-- EKey State
+data Crypt = Crypt [Word8] [Word8] deriving (Show)
+
+
+--encrypt = 
+
+
+hex :: Word8 -> [Word8]
 hex 0 = []
 hex x = (x .&. 15):(hex (shiftR x 4))
 
-hexS x = map mf (reverse $ hex x)
- where mf x = (['0'..'9'] ++ ['A'..]) !! x
+hexS' :: Word8 -> Char
+hexS' x = (['0'..'9'] ++ ['A'..]) !! (fromEnum x)
 
-key = [32,31..1]
+hexS :: Word8 -> [Char]
+hexS x = map hexS' (reverse $ hex x)
+
+key = [1..32]
+ekey = expand key
+
+msg = "Hello World"
+
+state = m ++ (replicate (16 - (length m)) 0)
+ where m = B.unpack $ TE.encodeUtf8 $ T.pack msg
 
 main = do
  putStrLn $ show $ map rj_xtime [0..255]
@@ -98,17 +121,20 @@ main = do
  putStrLn "log"
  putStrLn $ show $ map gf_log [0..255]
  putStrLn "sbox"
- putStrLn $ show $ map hexS $ map rj_sbox [0..15]
- putStrLn $ show $ map hexS $ map rj_sbox [240..255]
+ putStrLn $ show $ map hexS $ map rj_sbox ([0..15] :: [Word8])
+ putStrLn $ show $ map hexS $ map rj_sbox ([240..255] :: [Word8])
  putStrLn $ show $ map hexS rcon'
  putStrLn "key"
- putStrLn $ show $ map hexS $ reverse key
+ putStrLn $ show $ key
  putStrLn $ show $ length key
  putStrLn "expanded key"
- putStrLn $ show $ map hexS $ reverse $ expand key
+ putStrLn $ show $ map hexS $ expand key
  putStrLn $ show $ length $ expand key
  putStrLn $ show $ length $ expand [1..16]
  putStrLn $ show $ length $ expand [1..24]
+ putStrLn $ show $ msg
+ putStrLn $ show $ state 
+ putStrLn $ show $ addRoundKey (Crypt ekey state)
 
 
 
