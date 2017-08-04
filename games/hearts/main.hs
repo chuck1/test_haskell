@@ -17,9 +17,11 @@ data Card = Card Suit Int deriving (Eq, Show, Ord, Read)
 
 cardSuit (Card s _) = s
 
-cardIsPoint (Card Spades 10) = True
-cardIsPoint (Card Hearts _) = True
-cardIsPoint (Card _ _) = False
+cardPoints (Card Spades 10) = 13
+cardPoints (Card Hearts _) = 1
+cardPoints (Card _ _) = 0
+
+cardIsPoint c = (cardPoints) c > 0
 
 cardIsSuit s (Card suit _) = s == suit
 
@@ -28,6 +30,8 @@ type Cards = [Card]
 data PlayerType = AI | Human deriving (Show)
 
 data Player = Player Cards Cards PlayerType deriving (Show)
+
+playerPile (Player _ p _) = p
 
 data State = State [Player] deriving (Show)
 
@@ -70,18 +74,11 @@ leadOptions s@(State (p@(Player hand pile _):ps)) | hasTheTwo = [Card Clubs 0]
     where nonHeartsInHand = filter (\(Card s _) -> s /= Hearts) hand
           hasTheTwo = playerHasCardInHand ((==) (Card Clubs 0)) p
 
-yourMove s@(State ((Player hand pile _):ps)) [] = do
-    options <- return $ leadOptions s
-    putStrLn $ "your lead"
-    putStrLn $ "options: " ++ (show options)
-    choose s [] options
---    return $ head options
+yourMove s@(State ((Player hand pile _):ps)) [] = choose s [] (leadOptions s)
 
 yourMove s@(State ((Player hand pile _):ps)) played = do
     leadSuit <- return $ cardSuit $ (head . reverse) played
     options  <- return $ playOptions leadSuit (filterSuit leadSuit hand) s
-    putStrLn $ "played:  " ++ (show played)
-    putStrLn $ "options: " ++ (show options)
     choose s played options
 
 readCard :: [(Card,String)] -> Maybe Card
@@ -104,7 +101,7 @@ getCard options Nothing = do
     putStrLn ("you entered: " ++ str)
     getCard options $ readCard $ reads str
 
-
+choose :: State -> Cards -> Cards -> IO Card
 choose s@(State ((Player hand pile _):ps)) _ [card] = do
     return card
 
@@ -115,11 +112,16 @@ choose s@(State ((Player hand pile AI):ps)) played options = do
     return $ head options 
 
 choose s@(State ((Player hand pile Human):ps)) played options = do
+    putStrLn $ "played:  " ++ (show played)
+    putStrLn $ "options: " ++ (show options)
     card <- getCard options Nothing
     putStrLn ("the card you picked is: " ++ (show card))
     --if (elem card options) then return card
     return card
 
+
+countPoints :: Cards -> Int
+countPoints = foldl f 0 where f p c = p + cardPoints c
 
 playOptions suit [] s@(State ((Player hand _ _):ps)) | isFirstTrick s = playOptionsFirstTrick s
                                                      | otherwise = hand
@@ -161,22 +163,26 @@ doTrick' s = do
     s@(State [p0,p1,p2,p3]) <- doTrick s
     return s
 
+doRound s@(State ((Player [] _ _):ps)) = do
+    return s
+
+doRound s@(State ps) = do
+    s@(State ps) <- (pure s) >>= doTrick' >>= doRound
+    return s
+
+printPile (Player _ p _) = do
+    putStrLn $ "player pile. " ++ (show $ countPoints p) ++ " points"
+    mapM_ (putStrLn . ((++) "  ") . show) $ p
+
 main = do
     g <- getStdGen
     d <- return $ S.shuffle' [0..51] 52 g
-    s            <- return (State [Player [] [] Human, Player [] [] AI, Player [] [] AI, Player [] [] AI])
+    s            <- return (State [Player [] [] AI, Player [] [] AI, Player [] [] AI, Player [] [] AI])
     (State ps)   <- return $ beginRound (map intToCard d) s
     (Just i)     <- return $ whosGot (Card Clubs 0) ps
     s@(State ps) <- return $ (State (shiftLeft i ps))
-    s@(State ps) <- doTrick' s
-    s@(State ps) <- doTrick' s
-    s@(State ps) <- doTrick' s
-    s@(State ps) <- doTrick' s
-    s@(State ps) <- doTrick' s
-    s@(State ps) <- doTrick' s
-    s@(State ps) <- doTrick' s
-    s@(State ps) <- doTrick' s
-    putStrLn ""
+    s@(State ps@([p0,p1,p2,p3])) <- doRound s
+    mapM_ printPile ps
 
 
 
