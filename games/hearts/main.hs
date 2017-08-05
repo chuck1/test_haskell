@@ -137,7 +137,6 @@ removeFromHand cs (Player hand pile t) = Player (filter (not . flip elem cs) han
 
 removeFromHands cs (State ps) = State $ map (removeFromHand cs) ps
 
-shiftLeft x xs = drop x $ take (x + length xs) (cycle xs)
 
 stateShiftLeft n (State ps) = State $ shiftLeft n ps
 
